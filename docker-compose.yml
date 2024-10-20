@@ -1,0 +1,43 @@
+version: '3.8'
+
+services:
+  db:
+    image: postgres:14
+    restart: always
+    container_name: db
+    environment:
+      POSTGRES_USER: myuser
+      POSTGRES_PASSWORD: mypassword
+      POSTGRES_DB: mydatabase
+    volumes:
+      - ./pgdata:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+
+  # db:
+  #   build: ./db  # 指向 db 目錄以構建自定義的 PostgreSQL 映像
+  #   restart: always
+  #   container_name: db
+  #   environment:
+  #     POSTGRES_USER: myuser
+  #     POSTGRES_PASSWORD: mypassword
+  #     POSTGRES_DB: mydatabase
+  #   volumes:
+  #     - ./db:/var/lib/postgresql/data/pgdata  # 將 db 目錄與 PostgreSQL 資料夾同步
+  #   ports:
+  #     - "5432:5432"
+  
+  fastapi:
+    build: ./api/.
+    image: chsyu/api_gz:1.0
+    container_name: api
+    command: python3 ./api/app.py
+    volumes:
+      - .:/app
+      - ./gz:/app/gz
+    ports:
+      - "5001:5000" 
+    depends_on:
+      - db
+    environment:
+      DATABASE_URL: "postgresql+asyncpg://myuser:mypassword@db/mydatabase"
