@@ -1,11 +1,12 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from io import TextIOWrapper
+from io import TextIOWrapper, StringIO
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy import Column, Integer, String
 
+import asyncpg
 import os
 import pandas as pd
 import time
@@ -70,8 +71,45 @@ async def save_data_to_db(session: AsyncSession):
         return {"status": "failed", "message": f"{file_path} not found."}
 
 
+async def copy_data_to_db():
+    file_path = 'gz/member.tar.gz'
+    db_url = "postgresql://myuser:mypassword@localhost/mydatabase"
 
+    if os.path.exists(file_path):
+        try:
+            # 解壓 tar.gz 並獲取 CSV 文件
+            with tarfile.open(file_path, 'r:gz') as tar:
+                csv_file = tar.extractfile(tar.getmembers()[0])
 
+                # 建立與資料庫的連接
+                conn = await asyncpg.connect(db_url)
+                
+                # 使用 chunksize 讀取 CSV 文件
+                chunksize = 10**5  # 每次讀取 100 萬行
+                for chunk in pd.read_csv(csv_file, usecols=['name', 'priority'], chunksize=chunksize):
+                    # 確保 priority 列是整數型
+                    chunk['priority'] = pd.to_numeric(chunk['priority'], errors='coerce').fillna(0).astype(int)
+                    
+                    # 將 DataFrame 轉換為 CSV 格式，並去除索引
+                    csv_data = StringIO()
+                    chunk.to_csv(csv_data, index=False, header=False)
+                    csv_data.seek(0)
+
+                    # 使用 COPY TEXT 將數據導入資料庫
+                    async with conn.transaction():
+                        await conn.copy_to_table('member', source=csv_data, columns=['name', 'priority'], format='csv')
+
+                    print('Data copied to database.')
+
+                # 關閉連接
+                await conn.close()
+
+        except Exception as e:
+            return {"status": "failed", "message": str(e)}
+    else:
+        return {"status": "failed", "message": f"{file_path} not found."}
+    
+    
 # 結合pandas.pd讀取 member.tar.gz 的 API
 @app.get("/read_member_tar_gz_pd/")
 async def read_member_tar_gz_pd():
@@ -81,6 +119,14 @@ async def read_member_tar_gz_pd():
     
     end_time = time.time()
     return {"status": "success", "time": end_time - start_time}
+
+@app.get("/copy_member_tar_gz_pd/")
+async def copy_member_tar_gz_pd():
+    start_time = time.time()
+    await copy_data_to_db()
+    end_time = time.time()
+    return {"status": "success", "time": end_time - start_time}
+
 
 
 # 固定讀取位於 app.py 目錄內的 member.tar.gz 檔案

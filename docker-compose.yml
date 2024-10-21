@@ -2,7 +2,7 @@ version: '3.8'
 
 services:
   db:
-    image: postgres:14
+    image: chsyu/pg_custom:1.0  # 使用自定義的 PostgreSQL 影像
     restart: always
     container_name: db
     environment:
@@ -13,19 +13,6 @@ services:
       - ./pgdata:/var/lib/postgresql/data
     ports:
       - "5432:5432"
-
-  # db:
-  #   build: ./db  # 指向 db 目錄以構建自定義的 PostgreSQL 映像
-  #   restart: always
-  #   container_name: db
-  #   environment:
-  #     POSTGRES_USER: myuser
-  #     POSTGRES_PASSWORD: mypassword
-  #     POSTGRES_DB: mydatabase
-  #   volumes:
-  #     - ./db:/var/lib/postgresql/data/pgdata  # 將 db 目錄與 PostgreSQL 資料夾同步
-  #   ports:
-  #     - "5432:5432"
   
   fastapi:
     build: ./api/.

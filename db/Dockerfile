@@ -1,12 +1,11 @@
-# 使用官方 PostgreSQL 基礎映像
+# 基於官方的 PostgreSQL 14 映像
 FROM postgres:14
 
-# 複製自定義的 postgresql.conf
-COPY postgresql.conf /usr/share/postgresql/postgresql.conf
+# 複製自定義的 postgresql.conf 到容器內的指定位置
+COPY postgresql.conf /etc/postgresql/postgresql.conf
 
-# 設定環境變數以指定自定義配置文件
-ENV POSTGRESQL_CONF_DIR=/usr/share/postgresql
+# 設定環境變數以指定 PGDATA 和使用的配置文件路徑
 ENV PGDATA=/var/lib/postgresql/data
 
-# 告訴 PostgreSQL 使用自定義的配置文件
-CMD ["postgres", "-c", "config_file=/usr/share/postgresql/postgresql.conf"]
+# 使用自定義的 postgresql.conf 啟動 PostgreSQL
+CMD ["postgres", "-c", "config_file=/etc/postgresql/postgresql.conf"]
