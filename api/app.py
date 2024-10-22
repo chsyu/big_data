@@ -1,23 +1,16 @@
-from fastapi import FastAPI, HTTPException, BackgroundTasks
+from fastapi import FastAPI, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
-from io import TextIOWrapper, StringIO, BytesIO
-from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker
-from sqlalchemy import Column, Integer, String
+from io import BytesIO
 
 import asyncpg
-import psycopg2
 import os
 import pandas as pd
 import time
 import tarfile
-import csv
-import threading
 import asyncio 
 
 
-# 從環境變數中讀取資料庫 URL
+# 資料庫 URL
 DATABASE_URL = "postgresql://myuser:mypassword@db/mydatabase"
 
 app = FastAPI()
