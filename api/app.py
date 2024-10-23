@@ -16,21 +16,25 @@ db_url = "postgresql://myuser:mypassword@db/mydatabase"
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # 啟動時建立資料庫連接並創建表格
+    db_url = "postgresql://myuser:mypassword@db/mydatabase"
+    
+    # 使用 asyncpg 建立資料庫連接，並創建表格
     conn = await asyncpg.connect(db_url)
-    try:
-        await conn.execute('''
-            CREATE TABLE IF NOT EXISTS member (
-                id SERIAL PRIMARY KEY,
-                name VARCHAR(255),
-                priority INTEGER
-            );
-        ''')
-        print("Table 'member' created successfully during startup.")
-        yield
-    finally:
-        # 應用結束時關閉資料庫連接
-        await conn.close()
+    
+    # 創建表格 (如果不存在)，並優化儲存空間使用
+    await conn.execute('''
+        CREATE TABLE IF NOT EXISTS member (
+            id SERIAL PRIMARY KEY,
+            name VARCHAR(255),
+            priority INTEGER
+        );
+        ALTER TABLE member SET (fillfactor = 80);
+    ''')
+
+    await conn.close()
+    print("Table 'member' created and optimized for storage.")
+    
+    yield  # Lifespan context
 
 # 使用 lifespan 管理應用的生命周期
 app = FastAPI(lifespan=lifespan)
