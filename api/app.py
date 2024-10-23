@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from io import BytesIO
 
 import asyncpg
+import io
 import os
 import pandas as pd
 import time
@@ -46,7 +47,7 @@ async def startup():
     print("Table 'member' created successfully during startup.")
 
 async def copy_data_to_db(file_path='gz/member.tar.gz', chunk_size=10**6):
-    db_url = DATABASE_URL
+    db_url = "postgresql://myuser:mypassword@db/mydatabase"
     offset = 0  # 追蹤進度
     max_retries = 5
     retry_delay = 5
@@ -60,36 +61,40 @@ async def copy_data_to_db(file_path='gz/member.tar.gz', chunk_size=10**6):
             conn = await asyncpg.connect(db_url)
 
             with tarfile.open(file_path, 'r:gz') as tar:
-                csv_file = tar.extractfile(tar.getmembers()[0]).read().decode('utf-8')
+                # 逐步解壓每個文件
+                for member in tar.getmembers():
+                    if member.isfile():
+                        csv_file = tar.extractfile(member)
 
-                end_time = time.time()
-                print(f"解壓縮 {file_path} 花費時間: {end_time - now_time:.3f} 秒")
-                now_time = end_time
+                        end_time = time.time()
+                        print(f"解壓縮 {file_path} 花費時間: {end_time - now_time:.3f} 秒")
+                        now_time = end_time
 
-                # 使用 chunksize 分批讀取 CSV
-                for chunk in pd.read_csv(BytesIO(csv_file.encode('utf-8')), usecols=['name', 'priority'], chunksize=chunk_size):
-                    # 根據 offset 跳過已經處理的 chunks
-                    if offset > 0:
-                        offset -= 1
-                        continue
+                        # 使用 chunksize 分批讀取 CSV
+                        for chunk in pd.read_csv(io.TextIOWrapper(csv_file), usecols=['name', 'priority'], chunksize=chunk_size):
+                            # 根據 offset 跳過已經處理的 chunks
+                            if offset > 0:
+                                offset -= 1
+                                continue
 
-                    # 寫入資料庫
-                    csv_data = BytesIO()
-                    chunk.to_csv(csv_data, index=False, header=False, encoding='utf-8')
-                    csv_data.seek(0)
-                    chunk_cnt += 1
+                            # 將 chunk 轉換為 BytesIO
+                            csv_data = io.BytesIO()
+                            chunk.to_csv(csv_data, index=False, header=False, encoding='utf-8')
+                            csv_data.seek(0)
+                            chunk_cnt += 1
 
-                    async with conn.transaction():
-                        await conn.copy_to_table('member', source=csv_data, columns=['name', 'priority'], format='csv')
+                            # 寫入資料庫
+                            async with conn.transaction():
+                                await conn.copy_to_table('member', source=csv_data, columns=['name', 'priority'], format='csv')
 
-                    offset += 1
+                            offset += 1
 
-                end_time = time.time()
-                print(f"資料庫寫入 {file_path} 花費時間: {end_time - now_time:.3f} 秒, 共處理 {chunk_cnt} 個 chunks")
+                        end_time = time.time()
+                        print(f"資料庫寫入 {file_path} 花費時間: {end_time - now_time:.3f} 秒, 共處理 {chunk_cnt} 個 chunks")
 
-                await conn.close()
-                print(f"資料成功寫入資料庫")
-                break
+            await conn.close()
+            print(f"資料成功寫入資料庫")
+            break
 
         except Exception as e:
             print(f"資料庫連線失敗：{e}，嘗試重新連接")
