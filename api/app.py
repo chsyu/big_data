@@ -1,6 +1,6 @@
 from fastapi import FastAPI, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
-from io import BytesIO
+from contextlib import asynccontextmanager
 
 import asyncpg
 import io
@@ -12,9 +12,28 @@ import asyncio
 
 
 # 資料庫 URL
-DATABASE_URL = "postgresql://myuser:mypassword@db/mydatabase"
+db_url = "postgresql://myuser:mypassword@db/mydatabase"
 
-app = FastAPI()
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # 啟動時建立資料庫連接並創建表格
+    conn = await asyncpg.connect(db_url)
+    try:
+        await conn.execute('''
+            CREATE TABLE IF NOT EXISTS member (
+                id SERIAL PRIMARY KEY,
+                name VARCHAR(255),
+                priority INTEGER
+            );
+        ''')
+        print("Table 'member' created successfully during startup.")
+        yield
+    finally:
+        # 應用結束時關閉資料庫連接
+        await conn.close()
+
+# 使用 lifespan 管理應用的生命周期
+app = FastAPI(lifespan=lifespan)
 
 # CORS 設定
 app.add_middleware(
@@ -25,29 +44,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# 在啟動時創建資料庫表
-@app.on_event("startup")
-async def startup():
-    db_url = "postgresql://myuser:mypassword@db/mydatabase"
-
-    # 使用 asyncpg 建立資料庫連接，並創建表格
-    conn = await asyncpg.connect(db_url)
-
-    # 創建表格 (如果不存在)
-    await conn.execute('''
-        CREATE TABLE IF NOT EXISTS member (
-            id SERIAL PRIMARY KEY,
-            name VARCHAR(255),
-            priority INTEGER
-        );
-    ''')
-
-    # 關閉連接
-    await conn.close()
-    print("Table 'member' created successfully during startup.")
-
 async def copy_data_to_db(file_path='gz/member.tar.gz', chunk_size=10**6):
-    db_url = "postgresql://myuser:mypassword@db/mydatabase"
     offset = 0  # 追蹤進度
     max_retries = 5
     retry_delay = 5
