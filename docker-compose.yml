@@ -2,6 +2,7 @@ version: '3.8'
 
 services:
   db:
+    build: ./db
     image: chsyu/pg_custom:1.0  # 使用自定義的 PostgreSQL 影像
     restart: always
     container_name: db
@@ -20,7 +21,7 @@ services:
       retries: 5
   
   api:
-    build: ./api/.
+    build: ./api
     image: chsyu/api_gz:1.0
     container_name: api
     command: python3 ./api/app.py
@@ -36,7 +37,7 @@ services:
       DATABASE_URL: "postgresql+asyncpg://myuser:mypassword@db/mydatabase"
 
   web:
-    build: ./web/.
+    build: ./web
     image: chsyu/node_web:1.0
     container_name: web
     command: node ./web/server.js
