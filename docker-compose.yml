@@ -33,8 +33,7 @@ services:
     depends_on:
       db:
         condition: service_healthy
-    environment:
-      DATABASE_URL: "postgresql+asyncpg://myuser:mypassword@db/mydatabase"
+
 
   web:
     build: ./web
