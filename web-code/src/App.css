@@ -1,0 +1,67 @@
+.App {
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 100vw;
+}
+
+.drop-area {
+  width: 400px;
+  height: 200px;
+  border: 2px dashed #ccc;
+  border-radius: 8px;
+  margin: 20px auto;
+  position: relative;
+}
+
+.drop-area.dragging {
+  border-color: #4caf50;
+}
+
+.drop-desc {
+  position: absolute;
+  color: gray;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+}
+
+.file-list {
+  width: 100%;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-start;
+  /* align-items: flex-start; */
+  overflow-y: scroll; /* 超過高度時顯示垂直滾動條 */
+}
+
+.file-name-card {
+  z-index: 999;
+  background-color: darkgray;
+  color: white;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  padding: 5px;
+  margin: 5px;
+}
+
+.file-name {
+  padding: 0;
+  margin: 0;
+}
+
+button {
+  margin-top: 20px;
+  padding: 10px 20px;
+  background-color: #4caf50;
+  color: white;
+  border: none;
+  cursor: pointer;
+  border-radius: 4px;
+}
+
+button:hover {
+  background-color: #45a049;
+}

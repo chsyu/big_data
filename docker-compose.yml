@@ -18,14 +18,8 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
-    # deploy:
-    #   resources:
-    #     limits:
-    #       memory: 4G    # 增加內存分配
-    #       cpus: "2.0"   # 分配更多 CPU
-
   
-  fastapi:
+  api:
     build: ./api/.
     image: chsyu/api_gz:1.0
     container_name: api
@@ -40,3 +34,16 @@ services:
         condition: service_healthy
     environment:
       DATABASE_URL: "postgresql+asyncpg://myuser:mypassword@db/mydatabase"
+
+  web:
+    build: ./web/.
+    image: chsyu/node_web:1.0
+    container_name: web
+    command: node ./web/server.js
+    volumes:
+      - .:/web
+    ports:
+      - "3000:3000"
+    restart: always
+    depends_on:
+      - api

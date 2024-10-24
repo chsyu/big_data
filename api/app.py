@@ -124,12 +124,13 @@ async def copy_file_to_db(file_path):
 @app.get("/copy_member_tar_gz_pd/")
 async def copy_member_tar_gz_pd():
     start_time = time.time()
-    await copy_data_to_db(file_path='gz/member.tar.gz')
+    await copy_data_to_db(file_path='gz/member700k.tar.gz')
     end_time = time.time()
     return {"status": "success", "time": end_time - start_time}
 
 @app.post("/upload_gzfiles/")
 async def upload_files(filenames: list[str], background_tasks: BackgroundTasks):
+    print("received filenames:", filenames)
     background_tasks.add_task(copy_files_to_db, filenames)
     return {"status": "success", "message": "File processing started in background"}
 
