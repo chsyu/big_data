@@ -125,12 +125,13 @@ async def copy_files_to_db(file_list):
     file_processing_status["unprocessed_files"] = file_list.copy()
     for file_path in file_list:
         full_file_path = 'gz/' + file_path
-        file_processing_status["processed_files"].append(file_path)
+        file_processing_status["processed_files"].append(file_path + " 處理完成！")
         file_processing_status["unprocessed_files"].remove(file_path)
         print(f"正在處理 {full_file_path}...", flush=True)
         await copy_data_to_db(full_file_path)
     end_time = time.time()
-    file_processing_status["status"] = "completed"
+    file_processing_status["processed_files"].append("全部檔案上傳完畢！！")
+    file_processing_status["status"] = "idle"
     file_processing_status["message"] = "All files processed successfully"
     file_processing_status["end_time"] = datetime.fromtimestamp(end_time, tz=timezone.utc).isoformat()
     print(f"解壓縮與搬動資料到資料庫，總花費 {end_time - start_time:.3f} seconds.", flush=True)

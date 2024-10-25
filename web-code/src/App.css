@@ -35,6 +35,16 @@
   justify-content: flex-start;
   /* align-items: flex-start; */
   overflow-y: scroll; /* 超過高度時顯示垂直滾動條 */
+  padding: 0.4em;
+}
+
+.message-list {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  overflow-y: scroll; /* 超過高度時顯示垂直滾動條 */
+  padding: 0.4em;
 }
 
 .file-name-card {
