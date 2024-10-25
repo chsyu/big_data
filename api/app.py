@@ -138,8 +138,8 @@ async def copy_member_tar_gz_pd():
     end_time = time.time()
     return {"status": "success", "time": end_time - start_time}
 
-@app.get("/update_file_processing_status/")
-async def update_file_processing_status():
+@app.get("/get_file_processing_status/")
+async def get_file_processing_status():
     return file_processing_status
 
 @app.post("/upload_gzfiles/")
