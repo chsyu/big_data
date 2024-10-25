@@ -1,6 +1,7 @@
 from fastapi import FastAPI, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
+from datetime import datetime, timezone
 
 import asyncpg
 import io
@@ -117,26 +118,23 @@ async def copy_data_to_db(file_path='gz/member.tar.gz', chunk_size=10**6):
 # 異步保存文件數據到資料庫
 async def copy_files_to_db(file_list):
     start_time = time.time()
+    file_processing_status["status"] = "processing"
+    file_processing_status["message"] = "File processing in progress"
+    file_processing_status["start_time"] = datetime.fromtimestamp(start_time, tz=timezone.utc).isoformat()
+    file_processing_status["processed_files"] = []
+    file_processing_status["unprocessed_files"] = file_list.copy()
     for file_path in file_list:
         full_file_path = 'gz/' + file_path
+        file_processing_status["processed_files"].append(file_path)
+        file_processing_status["unprocessed_files"].remove(file_path)
         print(f"正在處理 {full_file_path}...", flush=True)
         await copy_data_to_db(full_file_path)
     end_time = time.time()
+    file_processing_status["status"] = "completed"
+    file_processing_status["message"] = "All files processed successfully"
+    file_processing_status["end_time"] = datetime.fromtimestamp(end_time, tz=timezone.utc).isoformat()
     print(f"解壓縮與搬動資料到資料庫，總花費 {end_time - start_time:.3f} seconds.", flush=True)
 
-async def copy_file_to_db(file_path):
-    start_time = time.time()
-    print(f"Processing {file_path}...", flush=True)
-    await copy_data_to_db(file_path)
-    end_time = time.time()
-    print(f"Data processing completed in {end_time - start_time} seconds.", flush=True)
-
-@app.get("/copy_member_tar_gz_pd/")
-async def copy_member_tar_gz_pd():
-    start_time = time.time()
-    await copy_data_to_db(file_path='gz/member700k.tar.gz')
-    end_time = time.time()
-    return {"status": "success", "time": end_time - start_time}
 
 @app.get("/get_file_processing_status/")
 async def get_file_processing_status():
@@ -147,12 +145,6 @@ async def upload_files(filenames: list[str], background_tasks: BackgroundTasks):
     print("received filenames:", filenames)
     background_tasks.add_task(copy_files_to_db, filenames)
     return {"status": "success", "message": "File processing started in background"}
-
-@app.post("/upload_gzfile/")
-async def copy_member_thread(background_tasks: BackgroundTasks):
-    print("begin setting background task")
-    background_tasks.add_task(copy_file_to_db, 'gz/member.tar.gz')
-    return {"status": "success", "message": "Data processing started in background"}
 
 
 os.environ["PYTHONUNBUFFERED"] = "1"
