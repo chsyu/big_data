@@ -5,7 +5,7 @@ FROM node:lts
 WORKDIR /web
 
 # 複製 package.json 和 package-lock.json（如果存在）
-COPY package*.json ./
+COPY package.json .
 
 # 安裝項目依賴
 RUN npm install

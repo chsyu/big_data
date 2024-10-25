@@ -3,5 +3,10 @@
 # node.js
 #
 node_modules/
+
+
+# PostgreSQL
+pgdata/
+
 npm-debug.log
 .DS_Store

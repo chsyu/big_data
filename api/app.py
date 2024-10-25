@@ -14,6 +14,16 @@ import asyncio
 # 資料庫 URL
 db_url = "postgresql://myuser:mypassword@db/mydatabase"
 
+# BackgroundTasks 檔案處理狀態
+file_processing_status = {
+    "status": "idle",
+    "message": "No file processing in progress",
+    "start_time": None,
+    "end_time": None,
+    "unprocessed_files": [],
+    "processed_files": []
+}
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     db_url = "postgresql://myuser:mypassword@db/mydatabase"
@@ -128,13 +138,17 @@ async def copy_member_tar_gz_pd():
     end_time = time.time()
     return {"status": "success", "time": end_time - start_time}
 
+@app.get("/update_file_processing_status/")
+async def update_file_processing_status():
+    return file_processing_status
+
 @app.post("/upload_gzfiles/")
 async def upload_files(filenames: list[str], background_tasks: BackgroundTasks):
     print("received filenames:", filenames)
     background_tasks.add_task(copy_files_to_db, filenames)
     return {"status": "success", "message": "File processing started in background"}
 
-@app.get("/upload_gzfile/")
+@app.post("/upload_gzfile/")
 async def copy_member_thread(background_tasks: BackgroundTasks):
     print("begin setting background task")
     background_tasks.add_task(copy_file_to_db, 'gz/member.tar.gz')
