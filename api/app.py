@@ -59,7 +59,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-async def copy_data_to_db(file_path='gz/member.tar.gz', chunk_size=10**6):
+async def copy_data_to_db(file_path, chunk_size=10**6):
+    global isError
     offset = 0  # 追蹤進度
     max_retries = 5
     retry_delay = 5
@@ -72,7 +73,7 @@ async def copy_data_to_db(file_path='gz/member.tar.gz', chunk_size=10**6):
             # 建立資料庫連接
             conn = await asyncpg.connect(db_url)
 
-            with tarfile.open(file_path, 'r:gz') as tar:
+            with tarfile.open('gz/' + file_path, 'r:gz') as tar:
                 # 逐步解壓每個文件
                 for member in tar.getmembers():
                     if member.isfile():
@@ -115,6 +116,7 @@ async def copy_data_to_db(file_path='gz/member.tar.gz', chunk_size=10**6):
             if retry_count >= max_retries:
                 file_processing_status["status"] = "idle"
                 file_processing_status["message"] = "無法在多次重試後完成資料傳輸"
+                file_processing_status["processed_files"].append(file_path + " 上傳失敗！")
                 raise Exception("無法在多次重試後完成資料傳輸")
 
 # 異步保存文件數據到資料庫
@@ -126,11 +128,10 @@ async def copy_files_to_db(file_list):
     file_processing_status["processed_files"] = []
     file_processing_status["unprocessed_files"] = file_list.copy()
     for file_path in file_list:
-        full_file_path = 'gz/' + file_path
-        file_processing_status["processed_files"].append(file_path + " 處理完成！")
+        print(f"正在處理 {'gz/' + file_path}...", flush=True)
+        await copy_data_to_db(file_path)
+        file_processing_status["processed_files"].append(file_path + " 上傳完成！")
         file_processing_status["unprocessed_files"].remove(file_path)
-        print(f"正在處理 {full_file_path}...", flush=True)
-        await copy_data_to_db(full_file_path)
     end_time = time.time()
     file_processing_status["processed_files"].append("全部檔案上傳完畢！！")
     file_processing_status["status"] = "idle"
