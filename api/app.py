@@ -113,6 +113,8 @@ async def copy_data_to_db(file_path='gz/member.tar.gz', chunk_size=10**6):
             await asyncio.sleep(retry_delay)
             retry_count += 1
             if retry_count >= max_retries:
+                file_processing_status["status"] = "idle"
+                file_processing_status["message"] = "無法在多次重試後完成資料傳輸"
                 raise Exception("無法在多次重試後完成資料傳輸")
 
 # 異步保存文件數據到資料庫
