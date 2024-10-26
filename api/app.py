@@ -59,6 +59,70 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# 定義 perform_vacuum 函數
+async def perform_vacuum(conn, full=False):
+    start_time = time.time()
+    if full:
+        await conn.execute("VACUUM FULL ANALYZE member;")  # 完全清理
+    else:
+        await conn.execute("VACUUM ANALYZE member;")  # 標準清理
+    end_time = time.time()
+    print(f"VACUUM 完成，耗時 {end_time - start_time:.3f} 秒.")
+
+
+# 批次更新 priority 欄位的函數
+async def batch_update_priorities():
+    start_time = time.time()
+    start_time_ = time.time()
+    print("開始更新priority")
+    conn = await asyncpg.connect(db_url)
+    batch_size = 500000
+    offset = 0
+    offset_ = 0
+    try:
+        while True:
+            # 從資料庫中批次讀取指定數量的資料
+            rows = await conn.fetch(
+                f"SELECT id, priority FROM member ORDER BY id LIMIT {batch_size} OFFSET {offset}"
+            )
+
+            # 檢查是否還有剩餘的資料
+            if not rows:
+                break
+
+            # 建立批次更新 SQL 語句
+            update_statements = [
+                f"UPDATE member SET priority = {row['priority'] + 1} WHERE id = {row['id']}"
+                for row in rows
+            ]
+
+            # 執行批次更新
+            await conn.execute("; ".join(update_statements))
+            
+            # 增加偏移量，處理下一批資料
+            offset += batch_size
+
+            # 每處理500萬筆進行一次VACUUM
+            if offset % 5000000 == 0:
+                await perform_vacuum(conn)
+
+            # 釋放批次內存
+            await asyncio.sleep(0.1)  # 避免連續處理過多負載
+
+            if(offset - offset_ >= 1000000):
+                offset_ = offset
+                end_time_ = time.time()
+                print(f"更新一百萬筆資料耗時 {end_time_ - start_time_:.3f} 秒.")
+                print(f"已更新 {offset} 筆資料")
+                start_time_ = end_time_
+
+        print("All priorities have been updated.")
+
+    finally:
+        end_time = time.time()
+        print(f"Priority 更新總耗時 {end_time - start_time:.3f} 秒.")
+        await conn.close()
+
 async def copy_data_to_db(file_path, chunk_size=10**6):
     global isError
     offset = 0  # 追蹤進度
@@ -150,6 +214,16 @@ async def upload_files(filenames: list[str], background_tasks: BackgroundTasks):
     background_tasks.add_task(copy_files_to_db, filenames)
     return {"status": "success", "message": "File processing started in background"}
 
+@app.put("/update_priorities/")
+async def update_priorities(background_tasks: BackgroundTasks):
+    background_tasks.add_task(batch_update_priorities)
+    return {"status": "success", "message": "Priority update started in background"}
+
+@app.get("/vacuum_db/")
+async def vacuum_db(background_tasks: BackgroundTasks):
+    conn = await asyncpg.connect(db_url)
+    background_tasks.add_task(perform_vacuum, conn=conn, full=True)
+    return {"status": "success", "message": "VACUUM started in background"} 
 
 os.environ["PYTHONUNBUFFERED"] = "1"
 
