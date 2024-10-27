@@ -2,6 +2,7 @@ from fastapi import FastAPI, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
+from concurrent.futures import ThreadPoolExecutor
 
 import asyncpg
 import io
@@ -59,26 +60,72 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# 定義 perform_vacuum 函數
-async def perform_vacuum(conn, full=False):
+# 執行標準 VACUUM 的函數
+async def perform_vacuum_with_conn(conn):
+    print("開始 standard VACUUM...")
+    await conn.execute("VACUUM ANALYZE member;")  # 標準清理
+    print("Standard VACUUM 完成。")
+
+async def perform_vacuum():
+    conn = await asyncpg.connect(db_url)
+    print("開始 standard VACUUM...")
+    await conn.execute("VACUUM ANALYZE member;")  # 標準清理
+    print("Standard VACUUM 完成。")
+    await conn.close()
+
+
+# 執行 FULL VACUUM 的函數
+async def perform_full_vacuum():
     start_time = time.time()
-    if full:
-        await conn.execute("VACUUM FULL ANALYZE member;")  # 完全清理
-    else:
-        await conn.execute("VACUUM ANALYZE member;")  # 標準清理
+    conn = await asyncpg.connect(db_url)
+    print("開始 VACUUM FULL...")
+    await conn.execute("VACUUM FULL ANALYZE member;")  # 完全清理
     end_time = time.time()
-    print(f"VACUUM 完成，耗時 {end_time - start_time:.3f} 秒.")
+    print(f"VACUUM FULL 完成，耗時 {end_time - start_time:.3f} 秒.")
+    await conn.close()
+
+# 計算資料總筆數
+async def get_total_records():
+    conn = await asyncpg.connect(db_url)
+    result = await conn.fetchval("SELECT COUNT(*) FROM member")
+    await conn.close()
+    return result
+
+# 單一批次更新 priority 欄位的函數
+async def single_batch_update_priorities(offset, batch_size):
+    conn = await asyncpg.connect(db_url)
+    try:
+        # 讀取批次資料
+        rows = await conn.fetch(
+            f"SELECT id, priority FROM member ORDER BY id LIMIT {batch_size} OFFSET {offset}"
+        )
+
+        # 處理資料
+        update_statements = [
+            f"UPDATE member SET priority = {row['priority'] + 1} WHERE id = {row['id']}"
+            for row in rows
+        ]
+
+        # 批量更新
+        await conn.execute("; ".join(update_statements))
+
+        # 加入短暫延遲，減少對資料庫的連續負載
+        await asyncio.sleep(0.1)
+
+    finally:
+        await conn.close()
 
 
 # 批次更新 priority 欄位的函數
-async def batch_update_priorities():
+async def batch_update_priorities(offset=0, batch_size=500000):
+    # 獲取資料總筆數
+    total_records = await get_total_records()
+    print(f"總共有 {total_records} 筆資料需要更新")
     start_time = time.time()
     start_time_ = time.time()
     print("開始更新priority")
     conn = await asyncpg.connect(db_url)
-    batch_size = 500000
-    offset = 0
-    offset_ = 0
+    offset_ = offset
     try:
         while True:
             # 從資料庫中批次讀取指定數量的資料
@@ -103,8 +150,8 @@ async def batch_update_priorities():
             offset += batch_size
 
             # 每處理500萬筆進行一次VACUUM
-            if offset % 5000000 == 0:
-                await perform_vacuum(conn)
+            if offset % 10000000 == 0:
+                await perform_vacuum_with_conn(conn)
 
             # 釋放批次內存
             await asyncio.sleep(0.1)  # 避免連續處理過多負載
@@ -122,6 +169,50 @@ async def batch_update_priorities():
         end_time = time.time()
         print(f"Priority 更新總耗時 {end_time - start_time:.3f} 秒.")
         await conn.close()
+
+
+# 並行處理更新 priority 欄位的管理函數
+async def parallel_processing():
+    start_time = time.time()
+    
+    # 獲取資料總筆數
+    total_records = await get_total_records()
+    print(f"總共有 {total_records} 筆資料需要更新")
+    batch_size = 500000
+    offsets = range(0, total_records, batch_size)
+    
+    # 設置 Semaphore 控制並行度
+    semaphore = asyncio.Semaphore(4)  # 每次只允許 4 個任務執行
+
+    async def limited_batch_update(offset):
+        async with semaphore:  # 控制同一時間的最大任務數
+            await single_batch_update_priorities(offset, batch_size)
+    
+    tasks = []
+
+    for i, offset in enumerate(offsets):
+        tasks.append(asyncio.create_task(limited_batch_update(offset)))
+
+        # 每 500 萬筆資料執行一次標準 VACUUM
+        if (i + 1) * batch_size % 10000000 == 0:
+            await asyncio.gather(*tasks)  # 等待當前批次完成
+            await perform_vacuum()       # 執行標準 VACUUM
+            tasks = []                   # 重置任務列表
+
+        # 每 100 萬筆顯示一次進度
+        if offset % 1000000 == 0 and offset > 0:
+            print(f"開始處理第 {offset} 筆資料")
+
+    
+    # 等待所有剩餘的批次完成
+    await asyncio.gather(*tasks)
+    
+    # 結束並顯示總耗時
+    end_time = time.time()
+    print(f"完成並行處理更新 priority 欄位，總耗時 {end_time - start_time:.3f} 秒.")
+    
+    # 執行 VACUUM FULL
+    await perform_full_vacuum()
 
 async def copy_data_to_db(file_path, chunk_size=10**6):
     global isError
@@ -219,10 +310,15 @@ async def update_priorities(background_tasks: BackgroundTasks):
     background_tasks.add_task(batch_update_priorities)
     return {"status": "success", "message": "Priority update started in background"}
 
+@app.put("/parallel_update_priorities/")
+async def parallel_update_priorities(background_tasks: BackgroundTasks):
+    background_tasks.add_task(parallel_processing)
+    return {"status": "success", "message": "Priority update started in background"}
+
 @app.get("/vacuum_db/")
 async def vacuum_db(background_tasks: BackgroundTasks):
     conn = await asyncpg.connect(db_url)
-    background_tasks.add_task(perform_vacuum, conn=conn, full=True)
+    background_tasks.add_task(perform_full_vacuum)
     return {"status": "success", "message": "VACUUM started in background"} 
 
 os.environ["PYTHONUNBUFFERED"] = "1"
