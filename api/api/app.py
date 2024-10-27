@@ -67,10 +67,12 @@ async def perform_vacuum_with_conn(conn):
     print("Standard VACUUM 完成。")
 
 async def perform_vacuum():
+    start_time = time.time()
     conn = await asyncpg.connect(db_url)
     print("開始 standard VACUUM...")
     await conn.execute("VACUUM ANALYZE member;")  # 標準清理
-    print("Standard VACUUM 完成。")
+    end_time = time.time()
+    print(f"Standard VACUUM 完成，耗時 {end_time - start_time:.3f} 秒.")
     await conn.close()
 
 
@@ -174,11 +176,11 @@ async def batch_update_priorities(offset=0, batch_size=500000):
 # 並行處理更新 priority 欄位的管理函數
 async def parallel_processing():
     start_time = time.time()
-    
+
     # 獲取資料總筆數
     total_records = await get_total_records()
     print(f"總共有 {total_records} 筆資料需要更新")
-    batch_size = 1000000
+    batch_size = 500000
     offsets = range(0, total_records, batch_size)
     
     # 設置 Semaphore 控制並行度
