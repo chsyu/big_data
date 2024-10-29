@@ -112,6 +112,29 @@ async def single_batch_update_priorities(start_id, end_id):
         await conn.close()
 
 
+async def single_batch_update_priorities_python(offset, batch_size):
+    conn = await asyncpg.connect(db_url)
+    try:
+        # 讀取批次資料
+        rows = await conn.fetch(
+            f"SELECT id, priority FROM member ORDER BY id LIMIT {batch_size} OFFSET {offset}"
+        )
+
+        # 處理資料
+        update_statements = [
+            f"UPDATE member SET priority = {row['priority'] + 1} WHERE id = {row['id']}"
+            for row in rows
+        ]
+
+        # 批量更新
+        await conn.execute("; ".join(update_statements))
+
+        # 加入短暫延遲，減少對資料庫的連續負載
+        await asyncio.sleep(0.1)
+
+    finally:
+        await conn.close()
+
 # 批次更新 priority 欄位的函數
 async def batch_update_priorities(offset=0, batch_size=500000):
     # 獲取資料總筆數
