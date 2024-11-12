@@ -26,8 +26,12 @@ services:
     container_name: api
     command: python3 ./api/app.py
     volumes:
-      - .:/app
-      - ./gz:/app/gz
+      - type: bind
+        source: .
+        target: /app
+      - type: bind
+        source: ./gz
+        target: /app/gz
     ports:
       - "5001:5000" 
     depends_on:
